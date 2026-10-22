@@ -124,6 +124,7 @@ main .wrap{padding-block:14px;display:grid;gap:12px}
     <div id="storeWarn" class="banner bad" hidden><b>This browser may not keep photos.</b> Send each report before closing the app.</div>
     <button class="btn amber wide" id="newRep" type="button" style="min-height:56px;font-size:18px">+ New report</button>
     <div id="reps" style="display:grid;gap:10px"></div>
+    <div class="card" id="cleared" hidden></div>
     <div class="ver" id="ver"></div>
   </section>
 
@@ -139,8 +140,8 @@ main .wrap{padding-block:14px;display:grid;gap:12px}
     </div>
     <div class="card">
       <h2>Finish</h2>
-      <p class="small muted" style="margin:0">When the job is done and the last send went out, finish the report to clear its photos from this phone.</p>
-      <div class="row"><button class="btn bad" id="finish" type="button">Finish and clear this report</button><span class="small muted" id="finnote"></span></div>
+      <p class="small muted" style="margin:0">Only when the job is completely done and everything has been sent. This takes the report off the main list. It is kept in <b>Cleared reports</b> for 7 days in case you need it back.</p>
+      <div class="row"><button class="btn bad" id="finish" type="button">Job done: clear this report…</button></div>
     </div>
   </section>
 </div></main>
@@ -160,7 +161,7 @@ main .wrap{padding-block:14px;display:grid;gap:12px}
 <script>
 (() => {
 "use strict";
-const VERSION = "1.0 · 2026-10-20";
+const VERSION = "1.1 · 2026-10-22";
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const ls = { get(k,d){ try{ const v=localStorage.getItem(k); return v===null?d:v; }catch(_){ return d; } }, set(k,v){ try{ localStorage.setItem(k,v); }catch(_){} } };
@@ -245,7 +246,13 @@ function show(view){
 }
 function repTitle(r){ return [r.asset, TYPES[r.type].short + (r.type==="handoff" ? (r.dir==="in"?" (Return)":" (Delivery)") : "")].filter(Boolean).join(" · "); }
 async function renderHome(){
-  reps = (await db.allReps()).sort((a,b)=>b.updated-a.updated);
+  const all = (await db.allReps()).sort((a,b)=>b.updated-a.updated);
+  reps = all.filter(r=>!r.cleared); const gone = all.filter(r=>r.cleared).sort((a,b)=>b.cleared-a.cleared);
+  $("cleared").innerHTML = gone.length ? `<h2>Cleared reports</h2><p class="small muted" style="margin:0">Kept on this phone for 7 days after clearing, then deleted for good.</p>` + gone.map(r=>{
+    const left=Math.max(0,Math.ceil((r.cleared+KEEP_MS-Date.now())/864e5)), unsent=r.photos.filter(p=>!p.sent).length;
+    return `<div class="row" style="justify-content:space-between;border-top:1px solid var(--line);padding-top:8px"><span class="small"><b>${esc(repTitle(r))}</b><br><span class="muted">${r.photos.length} photos${unsent?` · <b style="color:var(--bad)">${unsent} never sent</b>`:""} · deleted in ${left} day${left===1?"":"s"}</span></span><button class="btn ghost" type="button" data-restore="${r.id}">Restore</button></div>`;
+  }).join("") : "";
+  $("cleared").hidden = !gone.length;
   $("reps").innerHTML = reps.length ? reps.map(r=>{
     const n=r.photos.length, unsent=r.photos.filter(p=>!p.sent).length;
     return `<button class="rep" type="button" data-open="${r.id}"><span class="t">${esc(repTitle(r))}</span>
@@ -289,7 +296,7 @@ async function renderRep(){
 }
 $("photos").addEventListener("click", e=>{ const b=e.target.closest("[data-ph]"); if (b) openPhotoSheet(b.dataset.ph); });
 let notesT=null;
-$("rnotes").addEventListener("input", e=>{ if (!cur) return; cur.notes=e.target.value; clearTimeout(notesT); notesT=setTimeout(()=>db.saveRep(cur),500); });
+$("rnotes").addEventListener("input", e=>{ if (!cur) return; cur.notes=e.target.value; cur.notesAt=Date.now(); clearTimeout(notesT); notesT=setTimeout(()=>db.saveRep(cur),500); });
 
 // ---------- new / edit report ----------
 let draft=null;
@@ -555,12 +562,43 @@ $("sheet").addEventListener("click", async e=>{
 $("send").addEventListener("click", openSend);
 
 // ---------- finish ----------
-let finArmed=false;
-$("finish").addEventListener("click", async ()=>{
-  const unsent=cur.photos.filter(p=>!p.sent).length;
-  if (!finArmed){ finArmed=true; setTimeout(()=>{finArmed=false; $("finnote").textContent="";},6000); $("finnote").textContent = unsent?`${unsent} photo${unsent>1?"s":""} never sent. Tap again to delete anyway.`:"Tap again to delete this report and its photos from the phone."; return; }
-  finArmed=false; for (const p of cur.photos) await db.delBlob(p.id); await db.delRep(cur.id); cur=null; show("home"); toast("Report finished and cleared");
+// Clearing is a soft delete: the report is hidden and kept KEEP_MS, then purged at app start.
+const KEEP_MS = 7*864e5;
+function finishState(r){
+  const unsent=r.photos.filter(p=>!p.sent).length, last=r.sends.length?r.sends[r.sends.length-1].at:0;
+  const notesUnsent = !!(r.notes && r.notes.trim() && (!last || (r.notesAt||0)>last));
+  return {unsent, notesUnsent, neverSent:!r.sends.length, ok: r.photos.length>0 && !unsent && !notesUnsent};
+}
+function openFinish(){
+  const r=cur, s=finishState(r); openPhoto=null; draft=null;
+  $("stitle").textContent="Clear this report?";
+  const warn=[]; if (s.neverSent && r.photos.length) warn.push("This report has <b>never been sent</b>.");
+  else if (s.unsent) warn.push(`<b>${s.unsent} photo${s.unsent>1?"s were":" was"} never sent</b> to the office.`);
+  if (s.notesUnsent) warn.push("The <b>notes changed</b> after the last send.");
+  $("sbody").innerHTML = (s.ok ? `<div class="banner" style="background:var(--ok-bg)"><b>Everything has been sent.</b> All ${r.photos.length} photos went out in ${r.sends.length} send${r.sends.length>1?"s":""}.</div>`
+    : `<div class="banner bad" style="font-size:16px"><b style="font-size:18px">Stop: not everything was sent.</b><br>${warn.join("<br>")||"There are no photos in this report."}</div>
+       ${r.photos.length?`<button class="btn ok wide" type="button" id="fin-send" style="min-height:52px">Send it now</button>`:""}`)
+    + `<p class="small" style="margin:0">Clearing takes <b>${esc(repTitle(r))}</b> off the list. It stays in <b>Cleared reports</b> on the home screen for 7 days, where you can restore it, then it is deleted for good.</p>
+    ${s.ok?"":`<label class="small" style="display:flex;gap:12px;align-items:center;background:var(--plate);border:1px solid var(--line);border-radius:10px;padding:12px"><input type="checkbox" id="fin-ok" style="width:24px;height:24px;flex:none"> <span>I understand the office does not have everything from this report.</span></label>`}
+    <button class="btn bad wide" type="button" id="fin-yes" ${s.ok?"":"disabled style='opacity:.45'"}>Clear report</button>
+    <button class="btn ghost wide" type="button" id="fin-no">Keep it</button>`;
+  $("sheet").hidden=false; document.body.style.overflow="hidden";
+}
+$("finish").addEventListener("click", openFinish);
+$("sheet").addEventListener("change", e=>{ if (e.target.id==="fin-ok"){ const b=$("fin-yes"); b.disabled=!e.target.checked; b.style.opacity=e.target.checked?"1":".45"; } });
+$("sheet").addEventListener("click", async e=>{
+  if (e.target.id==="fin-no") return closeSheet();
+  if (e.target.id==="fin-send") return openSend();
+  if (e.target.id==="fin-yes" && !e.target.disabled){ cur.cleared=Date.now(); await db.saveRep(cur); cur=null; $("sheet").hidden=true; document.body.style.overflow=""; show("home"); toast("Report cleared. Restore it from Cleared reports for 7 days.",4500); }
 });
+$("cleared").addEventListener("click", async e=>{
+  const b=e.target.closest("[data-restore]"); if (!b) return;
+  const r=(await db.allReps()).find(x=>x.id===b.dataset.restore); if (!r) return;
+  delete r.cleared; await db.saveRep(r); renderHome(); toast("Report restored");
+});
+async function purgeCleared(){
+  for (const r of await db.allReps()) if (r.cleared && Date.now()-r.cleared>KEEP_MS){ for (const p of r.photos) await db.delBlob(p.id); await db.delRep(r.id); }
+}
 
 // ---------- install hint + boot ----------
 function installHint(){
@@ -575,6 +613,7 @@ function installHint(){
   idb=await openDB();
   if (idb){ persistent=true; try{ if (navigator.storage&&navigator.storage.persist) await navigator.storage.persist(); }catch(_){} }
   $("storeWarn").hidden=persistent;
+  try{ await purgeCleared(); }catch(_){}
   installHint(); show("home");
   if ("serviceWorker" in navigator && window.isSecureContext && location.protocol!=="file:"){
     navigator.serviceWorker.register("sw.js").then(reg=>{
