@@ -70,6 +70,7 @@ main .wrap{padding-block:14px;display:grid;gap:12px}
 .seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
 .chips{display:flex;gap:6px;flex-wrap:wrap}
 .chip{border:1px solid var(--line);background:var(--plate);border-radius:999px;padding:8px 12px;font:700 13.5px var(--f-mono);cursor:pointer;min-height:38px}
+.chips.sm .chip{padding:6px 10px;font-size:12.5px;min-height:34px}
 .chip small{font:400 11.5px var(--f-body);opacity:.75;margin-left:4px}
 .chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
 .cov{display:flex;gap:6px;flex-wrap:wrap}
@@ -95,7 +96,7 @@ main .wrap{padding-block:14px;display:grid;gap:12px}
 .phead{position:sticky;top:0;z-index:2;background:var(--navy);color:var(--navy-fg);display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px));padding-top:calc(10px + env(safe-area-inset-top,0px))}
 .phead h2{margin:0;font:600 21px var(--f-display);text-transform:uppercase}
 .pbody{padding:12px max(16px,env(safe-area-inset-right,0px)) calc(24px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));display:grid;gap:12px}
-.preview{background:#000;border-radius:10px;overflow:auto;max-height:50vh}
+.preview{background:#000;border-radius:10px;overflow:auto;max-height:36vh}
 .preview img{display:block;width:100%}
 .preview.zoom img{width:250%;max-width:none}
 .qrow{border-radius:8px;padding:8px 10px;font-size:14px}
@@ -161,7 +162,7 @@ main .wrap{padding-block:14px;display:grid;gap:12px}
 <script>
 (() => {
 "use strict";
-const VERSION = "1.1 · 2026-10-22";
+const VERSION = "1.2 · 2026-10-27";
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const ls = { get(k,d){ try{ const v=localStorage.getItem(k); return v===null?d:v; }catch(_){ return d; } }, set(k,v){ try{ localStorage.setItem(k,v); }catch(_){} } };
@@ -173,6 +174,8 @@ const stamp = t => { const d=new Date(t); return d.toLocaleDateString(undefined,
 // ---------- report types ----------
 const TYPES = {
   asset:   {name:"Asset capture", short:"Asset Capture", desc:"New trailer build, nameplates", hint:"Photograph every nameplate straight on, then tag it (UPS, DS, MBP…). Use Add photos for close-ups. The office AI reads the labels.",
+            fields:[]},
+  strip:   {name:"Strip / scrap unit", short:"Strip", desc:"Parts pulled for spares, scrap, purge", hint:"1. Photograph the nameplate. 2. For each part removed: one photo with its part number showing, then tap what it is. Hard-to-read label? Add a close-up. No typing needed.",
             fields:[]},
   startup: {name:"Startup / commissioning", short:"Startup", desc:"Display screens, settings", hint:"Photograph each UPS display screen and setting page. The office AI reads the readings into the startup checklist.",
             fields:[["ups","UPS asset #","UPS684"]]},
@@ -187,6 +190,17 @@ const TYPES = {
   site:    {name:"Site photos", short:"Site Photos", desc:"General, marketing", hint:"Anything worth keeping. Add a caption to each photo.",
             fields:[]},
 };
+// Strip / scrap: what each photo shows. Board names from "Circuit Boards / Printed Wire Assemblies" (NPower, 2015-04-13).
+const PARTS = [
+  ["Unit", ["Nameplate","Whole unit"]],
+  ["Power devices", ["Rectifier SCR","Inverter IGBT","Static Switch SCR"]],
+  ["Contactors", ["Contactor M1 Input","Contactor M3 Output","Contactor M4 Bypass Line","Contactor M5 Bypass Load","Contactor M6 Input Filter"]],
+  ["CTs", ["Hall Effect CT","Current CT"]],
+  ["Assemblies", ["DC Capacitor Assy","Input Filter Assy","Output Filter Assy"]],
+  ["Boards (NPower)", ["Micro Monitor PWA","CT Burden PWA","V.I.T. PWA","UPS Control PWA","System Switchgear PWA","H.V. PWA","Power Supply PWA","Inverter Driver PWA","Bypass / Static Switch Driver PWA","Rectifier Driver PWA","Rectifier Snubber PWA","Static Switch Snubber PWA","Redundant Fan Sensing PWA","IFM Comm Module"]],
+  ["Other", ["Fan","Fuse","Display","Breaker","Other part"]],
+];
+const ACTIONS = ["Strip for spares","Scrap","Purge"];
 const PREFIXES = [["UPS",""],["DS","breaker / switchboard"],["MBP","maint. bypass"],["MON","Sensaphone"],["HVAC","HVAC unit"],["CONT","HVAC controller"],["XFMR","transformer"],["BC","battery cabinet"]];
 const TRAILER_SET = ["UPS","DS","MBP","MON","HVAC","CONT","XFMR"];
 const TAGRE = /^(UPS|DS|MBP|MON|HVAC|CONT|XFMR|BC)\s*-?\s*(\d+)\s*$/i;
@@ -276,7 +290,13 @@ async function renderRep(){
   $("rhint").textContent = T.hint;
   $("rnotes").value = r.notes||"";
   // coverage
-  $("covcard").hidden = r.type!=="asset";
+  $("covcard").hidden = r.type!=="asset" && r.type!=="strip";
+  if (r.type==="strip"){ $("covcard").querySelector("h2").textContent="Unit coverage";
+    const plate=r.photos.some(p=>p.tag==="Nameplate"), parts=r.photos.filter(p=>p.tag&&!p.closeup&&p.tag!=="Nameplate"&&p.tag!=="Whole unit"), un=r.photos.filter(p=>!p.tag).length;
+    const kinds=new Set(parts.map(p=>p.tag)).size, qty=parts.reduce((n,p)=>n+(p.qty||1),0);
+    $("covtxt").textContent = `${r.f.actions||""}`;
+    $("cov").innerHTML = `<span class="cv ${plate?"have":"miss"}">Nameplate ${plate?"✓":"missing"}</span><span class="cv have">${kinds} part type${kinds===1?"":"s"} · ${qty} pcs</span>${un?`<span class="cv miss">${un} not tagged</span>`:""}`;
+  } else $("covcard").querySelector("h2").textContent="Trailer coverage";
   if (r.type==="asset"){
     const have={}; new Set(r.photos.map(p=>p.tag).filter(Boolean)).forEach(t=>{ const p=prefixOf(t); if (p) have[p]=(have[p]||0)+1; });
     const trailer = r.siteType!=="standalone";
@@ -289,7 +309,7 @@ async function renderRep(){
   // photos
   const items = await Promise.all(r.photos.map(async (p,i)=>`<div class="ph${p.q&&!p.q.ok?" warn":""}">
       <button class="th" type="button" data-ph="${p.id}" style="background-image:url('${await urlFor(p.id)}')" aria-label="Photo ${i+1}"></button>
-      <div class="b"><span class="tg">${esc(p.tag||("Photo "+(i+1)))}</span>
+      <div class="b"><span class="tg">${esc(p.tag||("Photo "+(i+1)))}${p.closeup?" · close-up":""}${!p.closeup&&(p.qty||1)>1?" ×"+p.qty:""}</span>
         <span class="cap">${p.caption?esc(p.caption):'<span class="muted">Tap to add a caption</span>'}</span>
         <span class="meta">${esc(stamp(p.at))}${p.sent?" · sent #"+p.sent:" · not sent"}${p.q&&!p.q.ok?" · check photo":""}</span></div></div>`));
   $("photos").innerHTML = items.length ? items.join("") : `<div class="empty"><b>No photos yet</b><span>Tap Take photo. Each photo gets a quick check for blur, glare and darkness.</span></div>`;
@@ -315,13 +335,14 @@ function renderForm(){
     ${r.type==="handoff"?`<div class="fld"><label>Direction</label><span class="seg"><button type="button" data-dir="out" aria-pressed="${r.dir!=="in"}">Delivery (out)</button><button type="button" data-dir="in" aria-pressed="${r.dir==="in"}">Return (in)</button></span></div>`:""}
     ${r.type==="asset"?`<div class="fld"><label>Site type</label><span class="seg"><button type="button" data-st="trailer" aria-pressed="${r.siteType!=="standalone"}">Trailer</button><button type="button" data-st="standalone" aria-pressed="${r.siteType==="standalone"}">Stand-alone</button></span></div>`:""}
     <div class="grid2">
-      <div class="fld"><label for="f-asset">Trailer / asset</label><input id="f-asset" value="${esc(r.asset)}" placeholder="TRL066" autocapitalize="characters" autocomplete="off"></div>
+      <div class="fld"><label for="f-asset">${r.type==="strip"?"UPS asset #":"Trailer / asset"}</label><input id="f-asset" value="${esc(r.asset)}" placeholder="${r.type==="strip"?"UPS358":"TRL066"}" autocapitalize="characters" autocomplete="off"></div>
       <div class="fld"><label for="f-job">Job #</label><input id="f-job" value="${esc(r.job)}" placeholder="SP26-0000" autocapitalize="characters" autocomplete="off"></div>
     </div>
     <div class="grid2">
       <div class="fld"><label for="f-site">Site</label><input id="f-site" value="${esc(r.site)}" placeholder="Customer / location" autocomplete="off"></div>
       <div class="fld"><label for="f-tech">Tech</label><input id="f-tech" value="${esc(r.tech)}" placeholder="Initials" autocomplete="off"></div>
     </div>
+    ${r.type==="strip"?`<div class="fld"><label>What's happening to this unit</label><div class="chips" id="f-act">${ACTIONS.map(a=>`<button type="button" class="chip" data-act="${esc(a)}" aria-pressed="${(r.f.actions||"").split(", ").includes(a)}">${esc(a)}</button>`).join("")}</div></div>`:""}
     ${T.fields.map(([k,l,ph])=>`<div class="fld"><label for="f-${k}">${esc(l)}</label><input id="f-${k}" data-f="${k}" value="${esc(r.f[k]||"")}" placeholder="${esc(ph)}" autocomplete="off"></div>`).join("")}
     <button class="btn amber wide" id="saveForm" type="button">${draft.edit?"Save details":"Start report"}</button>
     ${draft.edit?"":`<p class="small muted" style="margin:0">The report stays on this phone until you finish it. You can send it as many times as you need.</p>`}` : `<p class="small muted" style="margin:0">Pick what this report is for.</p>`}`;
@@ -343,21 +364,31 @@ async function openPhotoSheet(pid){
   $("sbody").innerHTML = `
     <div class="preview" id="prev"><img src="${await urlFor(p.id)}" alt="Photo"></div>
     ${p.q?(p.q.ok?`<div class="qrow good"><b>Looks OK.</b> Tap the photo to zoom and check you can read it.</div>`:p.q.issues.map(s=>`<div class="qrow warn"><b>Check:</b> ${esc(s)}</div>`).join("")):""}
+    ${r.type==="strip" ? `<div class="row"><label class="btn amber" for="p-next-shot" style="flex:1">📷 Next part<input id="p-next-shot" type="file" accept="image/*" capture="environment"></label><label class="btn ghost" for="p-more">+ Close-up<input id="p-more" type="file" accept="image/*" multiple></label></div>` + stripHtml(r,p) : `
     <div class="fld"><label for="p-cap">Caption</label><textarea id="p-cap" placeholder="What is this? Tap the keyboard microphone to talk.">${esc(p.caption||"")}</textarea></div>
-    <div class="fld"><label>Asset tag ${r.type==="asset"?"":"(optional)"}</label><div class="chips" id="p-pre">${PREFIXES.map(([k,h])=>`<button type="button" class="chip" data-pre="${k}" aria-pressed="${pre===k}">${k}${h?`<small>${h}</small>`:""}</button>`).join("")}</div></div>
-    <div class="grid2">
-      <div class="fld"><label for="p-tag">Tag</label><input id="p-tag" value="${esc(p.tag||"")}" placeholder="UPS684 or free text" autocapitalize="characters" autocomplete="off"></div>
-      <div class="fld"><label for="p-num">Number</label><input id="p-num" value="${esc(num)}" inputmode="numeric" pattern="[0-9]*" placeholder="684" autocomplete="off"></div>
-    </div>
-    <div id="p-extra">${extraHtml(pre,x)}</div>
+    ${r.type==="asset" ? tagHtml(r,p,pre,num,x) : `<details class="card" ${p.tag?"open":""}><summary class="small"><b>Different asset in this photo?</b> <span class="muted">Optional. This report is already for ${esc(r.asset||"—")}.</span></summary>${tagHtml(r,p,pre,num,x)}</details>`}`}
     <div class="row">
-      <label class="btn amber" for="p-retake">Retake<input id="p-retake" type="file" accept="image/*" capture="environment"></label>
-      <label class="btn ghost" for="p-more">+ More of this asset<input id="p-more" type="file" accept="image/*" multiple></label>
+      <label class="btn ${r.type==="strip"?"ghost":"amber"}" for="p-retake">Retake<input id="p-retake" type="file" accept="image/*" capture="environment"></label>
+      ${r.type==="strip"?"":`<label class="btn ghost" for="p-more">+ More of this asset<input id="p-more" type="file" accept="image/*" multiple></label>`}
       ${r.photos.length>1?`<button class="btn ghost" type="button" id="p-prev">◀</button><button class="btn ghost" type="button" id="p-next">▶</button>`:""}
     </div>
     <div class="row"><button class="btn bad" type="button" id="p-del">Delete photo</button><span id="p-delask" hidden>Sure? <button class="btn bad" type="button" id="p-delyes">Delete</button></span></div>`;
   $("sheet").hidden=false; document.body.style.overflow="hidden";
 }
+function tagHtml(r,p,pre,num,x){ return `
+    <div class="fld"><label>Asset tag ${r.type==="asset"?"":"(optional)"}</label><div class="chips" id="p-pre">${PREFIXES.map(([k,h])=>`<button type="button" class="chip" data-pre="${k}" aria-pressed="${pre===k}">${k}${h?`<small>${h}</small>`:""}</button>`).join("")}</div></div>
+    <div class="grid2">
+      <div class="fld"><label for="p-tag">Tag</label><input id="p-tag" value="${esc(p.tag||"")}" placeholder="UPS684 or free text" autocapitalize="characters" autocomplete="off"></div>
+      <div class="fld"><label for="p-num">Number</label><input id="p-num" value="${esc(num)}" inputmode="numeric" pattern="[0-9]*" placeholder="684" autocomplete="off"></div>
+    </div>
+    <div id="p-extra">${extraHtml(pre,x)}</div>`; }
+function stripHtml(r,p){ return `
+    <div class="fld"><label>What is it? (one tap)</label>${PARTS.map(([g,items])=>`<div class="small muted" style="margin-top:4px">${esc(g)}</div><div class="chips sm">${items.map(t=>`<button type="button" class="chip" data-part="${esc(t)}" aria-pressed="${p.tag===t}">${esc(t)}</button>`).join("")}</div>`).join("")}</div>
+    <div class="grid2">
+      <div class="fld"><label for="p-tag">Part (or type your own)</label><input id="p-tag" value="${esc(p.tag||"")}" placeholder="Tap above or type" autocomplete="off"></div>
+      <div class="fld" ${p.closeup?"hidden":""}><label for="p-qty">Qty in this photo</label><input id="p-qty" value="${esc(p.qty||1)}" inputmode="numeric" pattern="[0-9]*" autocomplete="off"></div>
+    </div>
+    <div class="fld"><label for="p-cap">Note (optional)</label><textarea id="p-cap" placeholder="Only what the photo can't show: bad, burnt, cracked…">${esc(p.caption||"")}</textarea></div>`; }
 function extraHtml(pre,x){
   if (pre==="MON") return `<div class="card" style="background:var(--info-bg);border-color:var(--info)"><b>Sensaphone Sentinel</b>
     <div class="fld"><label for="x-mac">MAC address</label><input id="x-mac" data-x="mac" value="${esc(x.mac||"")}" autocapitalize="characters" autocomplete="off"></div>
@@ -367,12 +398,13 @@ function extraHtml(pre,x){
     <div class="fld"><label for="x-b">HVAC unit B</label><input id="x-b" data-x="hvac_b" value="${esc(x.hvac_b||"")}" placeholder="blank if none" autocapitalize="characters" autocomplete="off"></div></div></div>`;
   return "";
 }
+function readPhoto(p){ const c=$("p-cap"), t=$("p-tag"), q=$("p-qty"); if (c) p.caption=c.value.trim(); if (t) p.tag = cur.type==="strip" ? t.value.trim() : t.value.trim().toUpperCase(); if (q) p.qty=Math.max(1,parseInt(q.value,10)||1); }
 function curPhoto(){ return cur && cur.photos.find(p=>p.id===openPhoto); }
 function setTagFromParts(){ const p=curPhoto(); if (!p) return; const pre=(document.querySelector("#p-pre [aria-pressed='true']")||{}).dataset; const n=$("p-num").value.replace(/\D/g,"");
   if (pre && pre.pre && n){ p.tag=pre.pre+n.padStart(3,"0"); $("p-tag").value=p.tag; } }
 async function closeSheet(){
   if (draft){ /* form */ }
-  else if (openPhoto && cur){ const p=curPhoto(); if (p){ p.caption=$("p-cap").value.trim(); p.tag=$("p-tag").value.trim().toUpperCase(); } await db.saveRep(cur); renderRep(); }
+  else if (openPhoto && cur){ const p=curPhoto(); if (p) readPhoto(p); await db.saveRep(cur); renderRep(); }
   openPhoto=null; draft=null; $("sheet").hidden=true; document.body.style.overflow="";
 }
 $("sclose").addEventListener("click", closeSheet);
@@ -380,9 +412,10 @@ $("sheet").addEventListener("click", async e=>{
   if (e.target===$("sheet")) return closeSheet();
   // form
   if (draft){
-    const t=e.target.closest("[data-type]"); if (t){ readForm(); draft.r.type=t.dataset.type; renderForm(); return; }
+    const t=e.target.closest("[data-type]"); if (t){ readForm(); draft.r.type=t.dataset.type; if (t.dataset.type==="strip"){ if (!draft.r.f.actions) draft.r.f.actions="Strip for spares"; if (!draft.r.site) draft.r.site="Shop"; } renderForm(); return; }
     const d=e.target.closest("[data-dir]"); if (d){ readForm(); draft.r.dir=d.dataset.dir; renderForm(); return; }
     const s=e.target.closest("[data-st]"); if (s){ readForm(); draft.r.siteType=s.dataset.st; renderForm(); return; }
+    const a=e.target.closest("[data-act]"); if (a){ readForm(); const set=new Set((draft.r.f.actions||"").split(", ").filter(Boolean)); set.has(a.dataset.act)?set.delete(a.dataset.act):set.add(a.dataset.act); draft.r.f.actions=ACTIONS.filter(x=>set.has(x)).join(", "); renderForm(); return; }
     if (e.target.id==="saveForm"){ readForm(); const r=draft.r; ls.set("pr.tech",r.tech); ls.set("pr.site",r.site);
       if (!r.asset && !r.site){ toast("Enter a trailer / asset or a site"); return; }
       const wasEdit=draft.edit; await db.saveRep(r); cur=r; draft=null; $("sheet").hidden=true; document.body.style.overflow="";
@@ -391,10 +424,12 @@ $("sheet").addEventListener("click", async e=>{
   }
   const p=curPhoto(); if (!p) return;
   if (e.target.closest("#prev")){ $("prev").classList.toggle("zoom"); return; }
+  const pc=e.target.closest("[data-part]");
+  if (pc){ document.querySelectorAll("[data-part]").forEach(b=>b.setAttribute("aria-pressed", b===pc)); $("p-tag").value=pc.dataset.part; p.tag=pc.dataset.part; await db.saveRep(cur); return; }
   const c=e.target.closest("[data-pre]");
   if (c){ document.querySelectorAll("#p-pre .chip").forEach(b=>b.setAttribute("aria-pressed", b===c)); setTagFromParts(); $("p-extra").innerHTML=extraHtml(c.dataset.pre, cur.assets[p.tag]||{}); if (!$("p-num").value) $("p-num").focus(); await db.saveRep(cur); return; }
   const i=cur.photos.indexOf(p);
-  if (e.target.id==="p-prev"||e.target.id==="p-next"){ p.caption=$("p-cap").value.trim(); p.tag=$("p-tag").value.trim().toUpperCase(); await db.saveRep(cur);
+  if (e.target.id==="p-prev"||e.target.id==="p-next"){ readPhoto(p); await db.saveRep(cur);
     const j=(i+(e.target.id==="p-next"?1:-1)+cur.photos.length)%cur.photos.length; openPhotoSheet(cur.photos[j].id); return; }
   if (e.target.id==="p-del"){ $("p-delask").hidden=false; return; }
   if (e.target.id==="p-delyes"){ cur.photos.splice(i,1); await db.delBlob(p.id); await db.saveRep(cur); openPhoto=null; $("sheet").hidden=true; document.body.style.overflow=""; renderRep(); toast("Photo deleted"); }
@@ -408,17 +443,18 @@ $("sheet").addEventListener("input", e=>{
 $("sheet").addEventListener("change", async e=>{
   if (draft) return; const p=curPhoto(); if (!p) return;
   if (e.target.id==="p-retake"){ const f=e.target.files[0]; if (!f) return; const pr=await prepare(f); await db.putBlob(p.id,pr.blob); urls.delete(p.id); p.q=pr.q; p.at=Date.now(); p.sent=0; await db.saveRep(cur); openPhotoSheet(p.id); }
-  if (e.target.id==="p-more"){ p.caption=$("p-cap").value.trim(); p.tag=$("p-tag").value.trim().toUpperCase(); const n=await addFiles(e.target.files, p.tag); toast(`Added ${n} photo${n===1?"":"s"}${p.tag?" to "+p.tag:""}`); openPhotoSheet(p.id); }
+  if (e.target.id==="p-next-shot"){ readPhoto(p); await db.saveRep(cur); const fs=e.target.files; if (!fs.length) return; await addFiles(fs,""); const last=cur.photos[cur.photos.length-1]; if (last) openPhotoSheet(last.id); return; }
+  if (e.target.id==="p-more"){ readPhoto(p); const n=await addFiles(e.target.files, p.tag, cur.type==="strip"); toast(`Added ${n} photo${n===1?"":"s"}${p.tag?" to "+p.tag:""}`); openPhotoSheet(p.id); }
 });
 
 // ---------- adding photos ----------
-async function addFiles(list, tag){
+async function addFiles(list, tag, closeup){
   const fs=[...list]; let n=0; let last=null;
   for (const f of fs){ let pr; try{ pr=await prepare(f); }catch(_){ toast("Couldn't open a photo"); continue; }
-    const id=uid(); await db.putBlob(id, pr.blob); const ph={id, at:Date.now(), caption:"", tag:tag||"", q:pr.q, w:pr.w, h:pr.h, sent:0}; cur.photos.push(ph); last=ph; n++; }
+    const id=uid(); await db.putBlob(id, pr.blob); const ph={id, at:Date.now(), caption:"", tag:tag||"", q:pr.q, w:pr.w, h:pr.h, sent:0}; if (closeup) ph.closeup=true; cur.photos.push(ph); last=ph; n++; }
   await db.saveRep(cur); renderRep(); return n;
 }
-$("cam").addEventListener("change", async e=>{ const fs=e.target.files; if (!fs.length) return; await addFiles(fs,""); e.target.value=""; const last=cur.photos[cur.photos.length-1]; if (last) openPhotoSheet(last.id); });
+$("cam").addEventListener("change", async e=>{ const fs=e.target.files; if (!fs.length) return; await addFiles(fs, cur.type==="strip" && !cur.photos.some(p=>p.tag==="Nameplate") ? "Nameplate" : ""); e.target.value=""; const last=cur.photos[cur.photos.length-1]; if (last) openPhotoSheet(last.id); });
 $("gal").addEventListener("change", async e=>{ const fs=e.target.files; if (!fs.length) return; const n=await addFiles(fs,""); e.target.value=""; toast(`Added ${n} photo${n===1?"":"s"}. Tap one to caption it.`); });
 
 // ---------- report data ----------
@@ -426,7 +462,7 @@ function reportData(r, photos, sendNo){
   return {format:"SurePower.PhotoReport.v1", app_version:VERSION, report_id:r.id, type:r.type, type_name:TYPES[r.type].name, direction:r.type==="handoff"?(r.dir==="in"?"return":"delivery"):undefined,
     asset:r.asset, site:r.site, job:r.job, tech:r.tech, site_type:r.type==="asset"?r.siteType:undefined, fields:r.f, notes:r.notes,
     send_number:sendNo, sent_at:new Date().toISOString(), photos_in_this_send:photos.length, photos_total:r.photos.length, linked_assets:r.assets,
-    photos:photos.map((p,i)=>({n:i+1, file:fileFor(p,i), tag:p.tag, caption:p.caption, taken:new Date(p.at).toISOString(), quality:p.q}))};
+    photos:photos.map((p,i)=>({n:i+1, file:fileFor(p,i), tag:p.tag, qty:r.type==="strip"?(p.closeup?0:(p.qty||1)):undefined, closeup:p.closeup||undefined, caption:p.caption, taken:new Date(p.at).toISOString(), quality:p.q}))};
 }
 const safe = s => String(s||"").trim().replace(/[\\/:*?"<>|]+/g,"").replace(/\s+/g," ").slice(0,60);
 function fileFor(p,i){ return `${String(i+1).padStart(3,"0")}_${(p.tag||"photo").replace(/[^A-Za-z0-9_-]+/g,"_")}.jpg`; }
@@ -460,9 +496,12 @@ async function buildPdf(r, photos, data){
   c+=`0.106 0.184 0.294 rg 0 ${H-96} ${W} 96 re f 1 1 1 rg\n`;
   c+=txt(M,H-50,22,"SURE POWER  PHOTO REPORT",true); c+=txt(M,H-74,12,`${T.name}${r.type==="handoff"?" - "+(r.dir==="in"?"Return":"Delivery"):""}   |   Send ${data.send_number}   |   ${today()}`);
   c+="0 0 0 rg\n"; y=H-130;
-  const rows=[["Trailer / asset",r.asset],["Site",r.site],["Job #",r.job],["Tech",r.tech]].concat(T.fields.map(([k,l])=>[l,r.f[k]])).concat([["Photos in this send",`${photos.length} of ${r.photos.length}`]]);
+  const rows=[[r.type==="strip"?"UPS asset":"Trailer / asset",r.asset],["Site",r.site],["Job #",r.job],["Tech",r.tech]].concat(T.fields.map(([k,l])=>[l,r.f[k]])).concat([["Photos in this send",`${photos.length} of ${r.photos.length}`]]);
   rows.forEach(([l,v])=>{ if (!v) return; c+=txt(M,y,10,l.toUpperCase(),true); wrap(v,70).forEach((ln,j)=>{ c+=txt(M+150,y-j*14,11,ln); }); y-=Math.max(1,wrap(v,70).length)*14+6; });
   if (r.type==="asset"){ const tags=[...new Set(photos.map(p=>p.tag).filter(Boolean))]; if (tags.length){ y-=6; c+=txt(M,y,10,"ASSETS IN THIS SEND",true); wrap(tags.join(", "),80).forEach((ln,j)=>{ c+=txt(M+150,y-j*14,11,ln); }); y-=wrap(tags.join(", "),80).length*14+6; } }
+  if (r.type==="strip"){ const sum={}; photos.forEach(p=>{ if (p.tag&&!p.closeup&&p.tag!=="Nameplate"&&p.tag!=="Whole unit") sum[p.tag]=(sum[p.tag]||0)+(p.qty||1); }); const keys=Object.keys(sum);
+    c+=txt(M,y,10,"ACTION",true); c+=txt(M+150,y,11,r.f.actions||"-"); y-=20;
+    if (keys.length){ c+=txt(M,y,10,"PARTS PHOTOGRAPHED",true); keys.slice(0,26).forEach((k,j)=>{ c+=txt(M+150,y-j*14,11,`${sum[k]} x ${k}`); }); y-=Math.min(keys.length,26)*14+6; } }
   if (r.notes){ y-=8; c+=txt(M,y,10,"NOTES",true); y-=16; wrap(r.notes,95).slice(0,30).forEach(ln=>{ c+=txt(M,y,11,ln); y-=14; }); }
   y-=10; c+=txt(M,Math.max(y,60),9,"Each following page is one photo with its tag, caption and time. Report data (report.json) is attached to this PDF for the office AI.");
   c+=txt(M,30,8,`Photo Report v${VERSION}  |  report ${r.id}`);
@@ -472,7 +511,7 @@ async function buildPdf(r, photos, data){
     writeObj(im,()=>{ push(`<< /Type /XObject /Subtype /Image /Width ${p.w} /Height ${p.h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${bytes.length} >>\nstream\n`); push(bytes); push("\nendstream"); });
     const capLines=wrap(p.caption||"",95).slice(0,6); const top=H-M-34; const bottom=M+20+capLines.length*14;
     const maxW=W-2*M, maxH=top-bottom-10; const sc=Math.min(maxW/p.w, maxH/p.h); const iw=p.w*sc, ih=p.h*sc; const ix=(W-iw)/2, iy=top-ih;
-    let pc=txt(M,H-M-14,14,`${i+1}.  ${p.tag||"Photo"}`,true)+txt(W-M-150,H-M-14,9,stamp(p.at));
+    let pc=txt(M,H-M-14,14,`${i+1}.  ${p.tag||"Photo"}${p.closeup?"  (close-up)":r.type==="strip"&&(p.qty||1)>1?"  x"+p.qty:""}`,true)+txt(W-M-150,H-M-14,9,stamp(p.at));
     pc+=`q ${iw.toFixed(2)} 0 0 ${ih.toFixed(2)} ${ix.toFixed(2)} ${iy.toFixed(2)} cm /Im1 Do Q\n`;
     let cy=iy-18; capLines.forEach(ln=>{ pc+=txt(M,cy,11,ln); cy-=14; });
     if (p.q && !p.q.ok) pc+=txt(M,Math.max(cy,30),8,"Phone check: "+p.q.issues.join("; "));
@@ -489,7 +528,7 @@ async function buildPdf(r, photos, data){
 const b64 = blob => new Promise(res=>{ const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.readAsDataURL(blob); });
 async function buildHtml(r, photos, data){
   const T=TYPES[r.type]; const imgs=[]; for (const p of photos){ imgs.push(await b64(await db.getBlob(p.id))); }
-  const rows=[["Trailer / asset",r.asset],["Site",r.site],["Job #",r.job],["Tech",r.tech]].concat(T.fields.map(([k,l])=>[l,r.f[k]])).filter(x=>x[1]);
+  const rows=[[r.type==="strip"?"UPS asset":"Trailer / asset",r.asset],["Site",r.site],["Job #",r.job],["Tech",r.tech]].concat(T.fields.map(([k,l])=>[l,r.f[k]])).concat(r.type==="strip"?[["Action",r.f.actions]]:[]).filter(x=>x[1]);
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(baseName(r,data.send_number))}</title>
 <style>:root{--bg:#eef1f5;--card:#fff;--ink:#14202e;--muted:#566377;--line:#c3ccd8;--navy:#1b2f4b;--amber:#c77700;color-scheme:light}
@@ -503,7 +542,7 @@ figcaption b{font-size:18px}.m{color:var(--muted);font-size:13px}.notes{white-sp
 <header><h1>Sure Power Photo Report</h1><p>${esc(T.name)}${r.type==="handoff"?" · "+(r.dir==="in"?"Return":"Delivery"):""} · send ${data.send_number} · ${esc(today())}</p></header>
 <main><div class="card"><table>${rows.map(([l,v])=>`<tr><td>${esc(l)}</td><td>${esc(v)}</td></tr>`).join("")}<tr><td>Photos</td><td>${photos.length} in this send, ${r.photos.length} in the report</td></tr></table></div>
 ${r.notes?`<div class="card"><b>Notes</b><div class="notes">${esc(r.notes)}</div></div>`:""}
-${photos.map((p,i)=>`<figure><img src="${imgs[i]}" alt="${esc(p.tag||"Photo "+(i+1))}"><figcaption><b>${i+1}. ${esc(p.tag||"Photo")}</b>${p.caption?`<span>${esc(p.caption)}</span>`:""}<span class="m">${esc(stamp(p.at))}${p.q&&!p.q.ok?" · phone check: "+esc(p.q.issues.join("; ")):""}</span></figcaption></figure>`).join("")}
+${photos.map((p,i)=>`<figure><img src="${imgs[i]}" alt="${esc(p.tag||"Photo "+(i+1))}"><figcaption><b>${i+1}. ${esc(p.tag||"Photo")}${p.closeup?" (close-up)":r.type==="strip"&&(p.qty||1)>1?" ×"+p.qty:""}</b>${p.caption?`<span>${esc(p.caption)}</span>`:""}<span class="m">${esc(stamp(p.at))}${p.q&&!p.q.ok?" · phone check: "+esc(p.q.issues.join("; ")):""}</span></figcaption></figure>`).join("")}
 <p class="m">Photo Report v${esc(VERSION)} · report ${esc(r.id)}</p></main>
 <script type="application/json" id="report-data">${JSON.stringify(data).replace(/</g,"\\u003c")}<\/script></body></html>`;
 }
@@ -517,10 +556,12 @@ function openSend(){
 }
 function renderSend(){
   const r=cur, unsent=r.photos.filter(p=>!p.sent).length, no=r.sends.length+1;
-  const untagged = r.type==="asset" ? r.photos.filter(p=>!p.tag).length : 0;
+  const untagged = (r.type==="asset"||r.type==="strip") ? r.photos.filter(p=>!p.tag).length : 0;
+  const noPlate = r.type==="strip" && !r.photos.some(p=>p.tag==="Nameplate");
   $("sbody").innerHTML = `
     ${r.sends.length?`<div class="banner">Sent ${r.sends.length} time${r.sends.length>1?"s":""} so far. This will be send #${no}.</div>`:""}
-    ${untagged?`<div class="banner bad">${untagged} photo${untagged>1?"s have":" has"} no asset tag.</div>`:""}
+    ${untagged?`<div class="banner bad">${untagged} photo${untagged>1?"s have":" has"} no ${r.type==="strip"?"part":"asset"} tag.</div>`:""}
+    ${noPlate?`<div class="banner bad">No nameplate photo. The office needs it to identify the unit.</div>`:""}
     <div class="fld"><label>What to send</label>
       <button type="button" class="sendopt" data-mode="new" aria-pressed="${sendMode==="new"}" ${unsent?"":"disabled style='opacity:.5'"}><b>New photos only (${unsent})</b><span class="small muted">Everything since the last send.</span></button>
       <button type="button" class="sendopt" data-mode="all" aria-pressed="${sendMode==="all"}"><b>Whole report (${r.photos.length})</b><span class="small muted">All photos so far, for a complete copy.</span></button></div>

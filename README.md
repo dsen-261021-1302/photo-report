@@ -8,6 +8,7 @@ A field photo app for Sure Power techs. It installs to the phone's home screen, 
 
 | Type | Used for |
 |---|---|
+| Strip / scrap unit | Parts pulled from a unit for spares, scrap or purge: nameplate first, then one photo per part with a one-tap part name and quantity; close-ups for hard-to-read labels. The office AI builds the Work Order, Status Update Sheet, parts list and bag labels |
 | Asset capture | New trailer builds: nameplates, with asset tags and trailer coverage check |
 | Startup / commissioning | UPS display screens and settings |
 | Load test | Display and load bank at each step; photo times build the timeline |
@@ -50,6 +51,7 @@ Upload the new files over the old ones (**Add file → Upload files**), write a 
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.2 | 2026-10-27 | New Strip / scrap unit report (NPower part and board names, quantity, close-ups, nameplate check). Asset number asked once: in other report types the per-photo asset tag is now an optional, folded section |
 | 1.1 | 2026-10-22 | Clear-report safeguard: warning and "Send it now" when anything was never sent, tick box to confirm, 7-day Cleared reports with Restore |
 | 1.0 | 2026-10-20 | First release: 7 report types, photo quality check, asset tags, PDF + HTML send, offline install |
 

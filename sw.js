@@ -1,6 +1,6 @@
 // Sure Power Photo Report service worker: keeps the app on the phone so it opens with no signal.
 // To publish an update: change VERSION, upload. Phones pick it up the next time they open the app with signal.
-const VERSION = "pr-2026-10-22a";
+const VERSION = "pr-2026-10-27a";
 const FILES = ["./", "index.html", "manifest.webmanifest", "icon-192.png", "icon-512.png", "apple-touch-icon.png"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(VERSION).then(c => c.addAll(FILES)).then(() => self.skipWaiting())); });
 self.addEventListener("activate", e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== VERSION).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
