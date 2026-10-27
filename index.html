@@ -70,6 +70,9 @@ main .wrap{padding-block:14px;display:grid;gap:12px}
 .seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
 .chips{display:flex;gap:6px;flex-wrap:wrap}
 .chip{border:1px solid var(--line);background:var(--plate);border-radius:999px;padding:8px 12px;font:700 13.5px var(--f-mono);cursor:pointer;min-height:38px}
+.qty{display:grid;grid-template-columns:48px minmax(0,1fr) 48px;gap:6px}
+.qty input{text-align:center;font-size:20px;font-weight:700}
+.qty .btn{font-size:22px;padding:0}
 .chips.sm .chip{padding:6px 10px;font-size:12.5px;min-height:34px}
 .chip small{font:400 11.5px var(--f-body);opacity:.75;margin-left:4px}
 .chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
@@ -162,7 +165,7 @@ main .wrap{padding-block:14px;display:grid;gap:12px}
 <script>
 (() => {
 "use strict";
-const VERSION = "1.2.1 · 2026-10-27";
+const VERSION = "1.2.2 · 2026-10-27";
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const ls = { get(k,d){ try{ const v=localStorage.getItem(k); return v===null?d:v; }catch(_){ return d; } }, set(k,v){ try{ localStorage.setItem(k,v); }catch(_){} } };
@@ -197,8 +200,9 @@ const PARTS = [
   ["Contactors", ["Contactor M1 Input","Contactor M3 Output","Contactor M4 Bypass Line","Contactor M5 Bypass Load","Contactor M6 Input Filter"]],
   ["CTs", ["Hall Effect CT","Current CT"]],
   ["Assemblies", ["DC Capacitor Assy","Input Filter Assy","Output Filter Assy"]],
-  ["Boards", ["Micro Monitor PWA","CT Burden PWA","V.I.T. PWA","UPS Control PWA","System Switchgear PWA","H.V. PWA (High Voltage)","Power Supply PWA","Inverter Driver PWA","Bypass / Static Switch Driver PWA","Rectifier Driver PWA","Rectifier Snubber PWA","Static Switch Snubber PWA","Redundant Fan Sensing PWA","IFM Comm Module"]],
-  ["Other", ["Fan","Fuse","Display","Breaker","Other part"]],
+  ["Door boards", ["UPS Control PWA (UPSC)","Micro Monitor PWA","V.I.T. PWA","System Switchgear PWA","CT Burden PWA","Power Supply PWA","H.V. PWA (High Voltage)"]],
+  ["Heatsink boards", ["Inverter Driver PWA","Rectifier Driver PWA","Rectifier Snubber PWA","Bypass SS Driver PWA","Bypass SS Snubber PWA","Redundant Fan Sensing PWA"]],
+  ["Other", ["IFM Comm Module","Fan","Fuse","Display","Breaker","Other part"]],
 ];
 const ACTIONS = ["Strip for spares","Scrap","Purge"];
 const PREFIXES = [["UPS",""],["DS","breaker / switchboard"],["MBP","maint. bypass"],["MON","Sensaphone"],["HVAC","HVAC unit"],["CONT","HVAC controller"],["XFMR","transformer"],["BC","battery cabinet"]];
@@ -383,7 +387,7 @@ function tagHtml(r,p,pre,num,x){ return `
     </div>
     <div id="p-extra">${extraHtml(pre,x)}</div>`; }
 let lastGroup="";
-function partGroup(r,p){ const hit=PARTS.find(([g,items])=>items.includes(p.tag)); if (hit) return hit[0]; if (!r.photos.some(x=>x.tag==="Nameplate")) return "Unit"; return lastGroup||"Boards"; }
+function partGroup(r,p){ const hit=PARTS.find(([g,items])=>items.includes(p.tag)); if (hit) return hit[0]; if (!r.photos.some(x=>x.tag==="Nameplate")) return "Unit"; return lastGroup||"Door boards"; }
 function itemsHtml(g,p){ const grp=PARTS.find(x=>x[0]===g)||PARTS[0]; return grp[1].map(t=>`<button type="button" class="chip" data-part="${esc(t)}" aria-pressed="${p.tag===t}">${esc(t)}</button>`).join(""); }
 function stripHtml(r,p){ return `
     <div class="fld"><label>What is it? Pick a group, then the part</label>
@@ -391,7 +395,7 @@ function stripHtml(r,p){ return `
       <div class="chips sm" id="p-items" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line)">${itemsHtml(partGroup(r,p),p)}</div></div>
     <div class="grid2">
       <div class="fld"><label for="p-tag">Part (or type your own)</label><input id="p-tag" value="${esc(p.tag||"")}" placeholder="Tap above or type" autocomplete="off"></div>
-      <div class="fld" ${p.closeup?"hidden":""}><label for="p-qty">Qty in this photo</label><input id="p-qty" value="${esc(p.qty||1)}" inputmode="numeric" pattern="[0-9]*" autocomplete="off"></div>
+      <div class="fld" ${p.closeup?"hidden":""}><label for="p-qty">Qty removed (one photo is enough)</label><div class="qty"><button type="button" class="btn ghost" data-q="-1" aria-label="One fewer">−</button><input id="p-qty" value="${esc(p.qty||1)}" inputmode="numeric" pattern="[0-9]*" autocomplete="off"><button type="button" class="btn ghost" data-q="1" aria-label="One more">+</button></div></div>
     </div>
     <div class="fld"><label for="p-cap">Note (optional)</label><textarea id="p-cap" placeholder="Only what the photo can't show: bad, burnt, cracked…">${esc(p.caption||"")}</textarea></div>`; }
 function extraHtml(pre,x){
@@ -429,6 +433,8 @@ $("sheet").addEventListener("click", async e=>{
   }
   const p=curPhoto(); if (!p) return;
   if (e.target.closest("#prev")){ $("prev").classList.toggle("zoom"); return; }
+  const qb=e.target.closest("[data-q]");
+  if (qb){ const q=$("p-qty"); q.value=Math.max(1,(parseInt(q.value,10)||1)+(+qb.dataset.q)); p.qty=+q.value; await db.saveRep(cur); return; }
   const gb=e.target.closest("[data-grp]");
   if (gb){ lastGroup=gb.dataset.grp; document.querySelectorAll("[data-grp]").forEach(b=>b.setAttribute("aria-pressed", b===gb)); $("p-items").innerHTML=itemsHtml(gb.dataset.grp,p); return; }
   const pc=e.target.closest("[data-part]");
