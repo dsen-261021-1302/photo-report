@@ -51,6 +51,7 @@ Upload the new files over the old ones (**Add file → Upload files**), write a 
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.2.4 | 2026-10-27 | Misc: OC-DI Input Relay Board (2-pin), OC-DO Output Relay Board (3-pin), Battery Interface PWA (BIB, battery cabinet) |
 | 1.2.3 | 2026-10-27 | Strip report: "Other" group renamed "Misc"; added DI and DO Alarm Relay Board (option) |
 | 1.2.2 | 2026-10-27 | Strip report: boards split into Door boards and Heatsink boards; "Qty removed" with − / + buttons (one photo for 3 identical boards); IFM moved to Other |
 | 1.2.1 | 2026-10-27 | Strip report: part names grouped (Unit, Power devices, Contactors, CTs, Assemblies, Boards, Other); pick a group, then the part. The app remembers the last group. H.V. PWA renamed "H.V. PWA (High Voltage)" |
