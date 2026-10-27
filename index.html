@@ -162,7 +162,7 @@ main .wrap{padding-block:14px;display:grid;gap:12px}
 <script>
 (() => {
 "use strict";
-const VERSION = "1.2 · 2026-10-27";
+const VERSION = "1.2.1 · 2026-10-27";
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const ls = { get(k,d){ try{ const v=localStorage.getItem(k); return v===null?d:v; }catch(_){ return d; } }, set(k,v){ try{ localStorage.setItem(k,v); }catch(_){} } };
@@ -197,7 +197,7 @@ const PARTS = [
   ["Contactors", ["Contactor M1 Input","Contactor M3 Output","Contactor M4 Bypass Line","Contactor M5 Bypass Load","Contactor M6 Input Filter"]],
   ["CTs", ["Hall Effect CT","Current CT"]],
   ["Assemblies", ["DC Capacitor Assy","Input Filter Assy","Output Filter Assy"]],
-  ["Boards (NPower)", ["Micro Monitor PWA","CT Burden PWA","V.I.T. PWA","UPS Control PWA","System Switchgear PWA","H.V. PWA","Power Supply PWA","Inverter Driver PWA","Bypass / Static Switch Driver PWA","Rectifier Driver PWA","Rectifier Snubber PWA","Static Switch Snubber PWA","Redundant Fan Sensing PWA","IFM Comm Module"]],
+  ["Boards", ["Micro Monitor PWA","CT Burden PWA","V.I.T. PWA","UPS Control PWA","System Switchgear PWA","H.V. PWA (High Voltage)","Power Supply PWA","Inverter Driver PWA","Bypass / Static Switch Driver PWA","Rectifier Driver PWA","Rectifier Snubber PWA","Static Switch Snubber PWA","Redundant Fan Sensing PWA","IFM Comm Module"]],
   ["Other", ["Fan","Fuse","Display","Breaker","Other part"]],
 ];
 const ACTIONS = ["Strip for spares","Scrap","Purge"];
@@ -382,8 +382,13 @@ function tagHtml(r,p,pre,num,x){ return `
       <div class="fld"><label for="p-num">Number</label><input id="p-num" value="${esc(num)}" inputmode="numeric" pattern="[0-9]*" placeholder="684" autocomplete="off"></div>
     </div>
     <div id="p-extra">${extraHtml(pre,x)}</div>`; }
+let lastGroup="";
+function partGroup(r,p){ const hit=PARTS.find(([g,items])=>items.includes(p.tag)); if (hit) return hit[0]; if (!r.photos.some(x=>x.tag==="Nameplate")) return "Unit"; return lastGroup||"Boards"; }
+function itemsHtml(g,p){ const grp=PARTS.find(x=>x[0]===g)||PARTS[0]; return grp[1].map(t=>`<button type="button" class="chip" data-part="${esc(t)}" aria-pressed="${p.tag===t}">${esc(t)}</button>`).join(""); }
 function stripHtml(r,p){ return `
-    <div class="fld"><label>What is it? (one tap)</label>${PARTS.map(([g,items])=>`<div class="small muted" style="margin-top:4px">${esc(g)}</div><div class="chips sm">${items.map(t=>`<button type="button" class="chip" data-part="${esc(t)}" aria-pressed="${p.tag===t}">${esc(t)}</button>`).join("")}</div>`).join("")}</div>
+    <div class="fld"><label>What is it? Pick a group, then the part</label>
+      <div class="chips" id="p-groups">${PARTS.map(([g])=>`<button type="button" class="chip" data-grp="${esc(g)}" aria-pressed="${g===partGroup(r,p)}">${esc(g)}</button>`).join("")}</div>
+      <div class="chips sm" id="p-items" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line)">${itemsHtml(partGroup(r,p),p)}</div></div>
     <div class="grid2">
       <div class="fld"><label for="p-tag">Part (or type your own)</label><input id="p-tag" value="${esc(p.tag||"")}" placeholder="Tap above or type" autocomplete="off"></div>
       <div class="fld" ${p.closeup?"hidden":""}><label for="p-qty">Qty in this photo</label><input id="p-qty" value="${esc(p.qty||1)}" inputmode="numeric" pattern="[0-9]*" autocomplete="off"></div>
@@ -424,8 +429,10 @@ $("sheet").addEventListener("click", async e=>{
   }
   const p=curPhoto(); if (!p) return;
   if (e.target.closest("#prev")){ $("prev").classList.toggle("zoom"); return; }
+  const gb=e.target.closest("[data-grp]");
+  if (gb){ lastGroup=gb.dataset.grp; document.querySelectorAll("[data-grp]").forEach(b=>b.setAttribute("aria-pressed", b===gb)); $("p-items").innerHTML=itemsHtml(gb.dataset.grp,p); return; }
   const pc=e.target.closest("[data-part]");
-  if (pc){ document.querySelectorAll("[data-part]").forEach(b=>b.setAttribute("aria-pressed", b===pc)); $("p-tag").value=pc.dataset.part; p.tag=pc.dataset.part; await db.saveRep(cur); return; }
+  if (pc){ document.querySelectorAll("[data-part]").forEach(b=>b.setAttribute("aria-pressed", b===pc)); $("p-tag").value=pc.dataset.part; p.tag=pc.dataset.part; lastGroup=(PARTS.find(x=>x[1].includes(pc.dataset.part))||[""])[0]; await db.saveRep(cur); return; }
   const c=e.target.closest("[data-pre]");
   if (c){ document.querySelectorAll("#p-pre .chip").forEach(b=>b.setAttribute("aria-pressed", b===c)); setTagFromParts(); $("p-extra").innerHTML=extraHtml(c.dataset.pre, cur.assets[p.tag]||{}); if (!$("p-num").value) $("p-num").focus(); await db.saveRep(cur); return; }
   const i=cur.photos.indexOf(p);
