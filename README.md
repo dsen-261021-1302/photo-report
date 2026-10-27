@@ -51,6 +51,7 @@ Upload the new files over the old ones (**Add file → Upload files**), write a 
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.2.5 | 2026-10-27 | Misc: LBS Interface PWA (option), Capacitor PWA |
 | 1.2.4 | 2026-10-27 | Misc: OC-DI Input Relay Board (2-pin), OC-DO Output Relay Board (3-pin), Battery Interface PWA (BIB, battery cabinet) |
 | 1.2.3 | 2026-10-27 | Strip report: "Other" group renamed "Misc"; added DI and DO Alarm Relay Board (option) |
 | 1.2.2 | 2026-10-27 | Strip report: boards split into Door boards and Heatsink boards; "Qty removed" with − / + buttons (one photo for 3 identical boards); IFM moved to Other |

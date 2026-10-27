@@ -165,7 +165,7 @@ main .wrap{padding-block:14px;display:grid;gap:12px}
 <script>
 (() => {
 "use strict";
-const VERSION = "1.2.4 · 2026-10-27";
+const VERSION = "1.2.5 · 2026-10-27";
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const ls = { get(k,d){ try{ const v=localStorage.getItem(k); return v===null?d:v; }catch(_){ return d; } }, set(k,v){ try{ localStorage.setItem(k,v); }catch(_){} } };
@@ -202,7 +202,7 @@ const PARTS = [
   ["Assemblies", ["DC Capacitor Assy","Input Filter Assy","Output Filter Assy"]],
   ["Door boards", ["UPS Control PWA (UPSC)","Micro Monitor PWA","V.I.T. PWA","System Switchgear PWA","CT Burden PWA","Power Supply PWA","H.V. PWA (High Voltage)"]],
   ["Heatsink boards", ["Inverter Driver PWA","Rectifier Driver PWA","Rectifier Snubber PWA","Bypass SS Driver PWA","Bypass SS Snubber PWA","Redundant Fan Sensing PWA"]],
-  ["Misc", ["OC-DI Input Relay Board (2-pin)","OC-DO Output Relay Board (3-pin)","IFM Comm Module","Battery Interface PWA (BIB, batt cab)","Fan","Fuse","Display","Breaker","Other part"]],
+  ["Misc", ["OC-DI Input Relay Board (2-pin)","OC-DO Output Relay Board (3-pin)","IFM Comm Module","Battery Interface PWA (BIB, batt cab)","LBS Interface PWA (option)","Capacitor PWA","Fan","Fuse","Display","Breaker","Other part"]],
 ];
 const ACTIONS = ["Strip for spares","Scrap","Purge"];
 const PREFIXES = [["UPS",""],["DS","breaker / switchboard"],["MBP","maint. bypass"],["MON","Sensaphone"],["HVAC","HVAC unit"],["CONT","HVAC controller"],["XFMR","transformer"],["BC","battery cabinet"]];
