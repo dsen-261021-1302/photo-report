@@ -51,6 +51,7 @@ Upload the new files over the old ones (**Add file → Upload files**), write a 
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.2.3 | 2026-10-27 | Strip report: "Other" group renamed "Misc"; added DI and DO Alarm Relay Board (option) |
 | 1.2.2 | 2026-10-27 | Strip report: boards split into Door boards and Heatsink boards; "Qty removed" with − / + buttons (one photo for 3 identical boards); IFM moved to Other |
 | 1.2.1 | 2026-10-27 | Strip report: part names grouped (Unit, Power devices, Contactors, CTs, Assemblies, Boards, Other); pick a group, then the part. The app remembers the last group. H.V. PWA renamed "H.V. PWA (High Voltage)" |
 | 1.2 | 2026-10-27 | New Strip / scrap unit report (NPower part and board names, quantity, close-ups, nameplate check). Asset number asked once: in other report types the per-photo asset tag is now an optional, folded section |
